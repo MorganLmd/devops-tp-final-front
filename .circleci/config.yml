@@ -100,13 +100,13 @@ workflows:
   build-test-back-and-db:
     jobs:
       - install
-      #- front-netlify-build:
-      #    requires:
-      #      - install
-      #- front-netlify-deploy:
-      #    requires:
-      #      - install
-      #      - front-netlify-build
+      - front-netlify-build:
+          requires:
+            - install
+      - front-netlify-deploy:
+          requires:
+            - install
+            - front-netlify-build
       - dockerhub-publishing:
           requires:
             - install
