@@ -21,7 +21,7 @@ commands:
 executors:
   node-executor:
     docker:
-      - image: circleci/node:dubnium-browsers
+      - image: circleci/node:8.12.0
 
   netlify-deploy-executor:
     docker:
