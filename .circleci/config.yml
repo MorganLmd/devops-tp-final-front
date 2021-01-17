@@ -1,0 +1,112 @@
+version: 2.1
+
+commands:
+  restore_cache_cmd:
+    description: "Restore cache from a previous workflow"
+    steps:
+      - restore_cache:
+          keys:
+            - dependencies-{{ checksum "package.json" }}-{{ .Environment.CACHE_VERSION }}
+            # fallback to using the latest cache if no exact match is found
+            - dependencies-
+
+  save_cache_cmd:
+    description: "save cache with workflow new state"
+    steps:
+      - save_cache:
+          key: dependencies-{{ checksum "package.json" }}-{{ .Environment.CACHE_VERSION }}
+          paths:
+            - node_modules
+
+executors:
+  node-executor:
+    docker:
+      - image: circleci/node:dubnium-browsers
+
+  netlify-deploy-executor:
+    docker:
+      - image: circleci/node:dubnium-browsers
+
+  dockerhub-publisher:
+    environment:
+      IMAGE_NAME: morganlmd/devops-tp-final-front-docker
+      IMAGE_NAME_TMP: app
+    docker:
+      - image: docker:17.05.0-ce-git
+
+jobs:
+  install:
+    executor: node-executor
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - restore_cache_cmd
+      - yarn install
+      - save_cache_cmd
+
+  front-netlify-build:
+    executor: node-executor
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - restore_cache_cmd
+      - run: yarn build
+      - run:
+          name: Copy deployment artifacts to workspace
+          command: |
+            cp ./dist/ /tmp/server -r
+      - store_artifacts:
+          path: /tmp/server
+      - persist_to_workspace:
+          root: /tmp
+          paths:
+            - server
+      - save_cache_cmd
+
+  front-netlify-deploy:
+    executor: netlify-deploy-executor
+    working_directory: ~/repo
+    steps:
+      - attach_workspace:
+          at: /tmp
+      - run:
+          name: install netlify cli
+          command: sudo npm install netlify-cli -g
+      - run:
+          name: Deploy app
+          command: netlify deploy --site $NETLIFY_SITE_ID --auth $NETLIFY_AUTH_TOKEN --prod --dir=/tmp/server
+
+  dockerhub-publishing:
+    working_directory: /dockerapp
+    executor: dockerhub-publisher
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: Building docker image
+          command: |
+            docker build --cache-from=app -t app .
+      - deploy:
+          name: publishing docker image to dockerhub
+          command: |
+            docker login -e $DOCKER_HUB_EMAIL -u $DOCKER_HUB_USER_ID -p $DOCKER_HUB_PWD
+            docker tag $IMAGE_NAME_TMP $IMAGE_NAME:$CIRCLE_BUILD_NUM
+            docker tag $IMAGE_NAME_TMP $IMAGE_NAME:latest
+            docker push $IMAGE_NAME:$CIRCLE_BUILD_NUM
+            docker push $IMAGE_NAME:latest
+
+workflows:
+  version: 2
+  build-test-back-and-db:
+    jobs:
+      - install
+      #- front-netlify-build:
+      #    requires:
+      #      - install
+      #- front-netlify-deploy:
+      #    requires:
+      #      - install
+      #      - front-netlify-build
+      - dockerhub-publishing:
+          requires:
+            - install
