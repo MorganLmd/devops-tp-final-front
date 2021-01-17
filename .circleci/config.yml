@@ -97,7 +97,7 @@ jobs:
 
 workflows:
   version: 2
-  build-test-back-and-db:
+  devops-final-front:
     jobs:
       - install
       - front-netlify-build:
