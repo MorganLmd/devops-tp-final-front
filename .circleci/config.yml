@@ -41,7 +41,7 @@ jobs:
     steps:
       - checkout
       - restore_cache_cmd
-      - yarn install
+      - run: yarn install
       - save_cache_cmd
 
   front-netlify-build:
